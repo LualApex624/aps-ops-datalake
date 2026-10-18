@@ -56,3 +56,53 @@
 - Où : agent
 - Limite : pas de graphe de dépendances entre CI → impact « en aval » non couvertincidents, cmdb, runbooks
 - Où : agent
+
+
+## Modèle de données
+
+### fact_incident
+- Grain : 1 ligne = 1 incident unique (après dédoublonnage en silver)
+- Clés étrangères : date_opened_key → dim_date, ci_id → dim_ci, app_id → dim_application,
+  team_id → dim_team, priority → dim_priority
+- Mesures :
+  - resolution_minutes (additive en théorie, mais on l'agrège par MÉDIANE → non additive en pratique)
+  - is_breach_sla (0/1, additive : somme = nb d'incidents hors SLA)
+- Attributs propres (dimension dégénérée) : incident_id, category, status
+
+
+### fact_change
+- Grain : 1 ligne = 1 change unique
+- Clés étrangères : date_start_key → dim_date, ci_id → dim_ci, app_id → dim_application
+- Mesures :
+  - has_incident_48h (0/1, additive : somme = nb de changes suivis d'un incident)
+  - incidents_48h_count (additive)
+  - duration_minutes = actual_end − planned_start (agrégée par médiane)
+  - is_failed (0/1, depuis result, additive)
+- Attributs propres : change_id, change_type (standard / normal / emergency), result
+- Le taux de SRE-1 n'est PAS stocké : il est calculé dans v_change_risk
+
+### fact_capacity
+- Grain : 1 ligne = 1 CI × 1 jour (clé unique : date_key + ci_id)
+- Clés étrangères : date_key → dim_date, ci_id → dim_ci
+- Mesures :
+  - cpu_pct (non additive → MAX / AVG)
+  - disk_pct (non additive → dernière valeur pour OPS-1, MAX/AVG pour les tendances)
+
+### Dimensions
+- dim_date : date_key (AAAAMMJJ), date, day_of_week, is_weekend, week, month, quarter
+  → day_of_week sert à détecter l'incident du lundi (pattern 2)
+
+- dim_application : app_id, app_name, business_criticality (1–4)
+  → construite à partir des app_id distincts de la CMDB
+
+- dim_ci : ci_id, ci_type, app_id, owner_team
+
+- dim_team : team_id, team_name
+  → construite à partir de cmdb.owner_team ∪ incidents.team
+
+- dim_priority : priority (P1–P4), label, sla_target_minutes
+  → les cibles SLA sont des hypothèses, documentées
+
+## Règles de qualité
+- Source de vérité CI → application : la CMDB. Les incohérences avec incidents.app_id sont comptées et publiées.
+- Un ratio ou un pourcentage n'est jamais stocké au grain : il se calcule à l'agrégation.
