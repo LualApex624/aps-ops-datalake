@@ -1,0 +1,50 @@
+{
+  "seed": 42,
+  "period": [
+    "2026-04-01",
+    "2026-09-30"
+  ],
+  "rows": {
+    "incidents": 4080,
+    "changes": 1161,
+    "cmdb": 250,
+    "capacity": 41175
+  },
+  "patterns": {
+    "P1_change_risk": {
+      "apps": [
+        "APP-01",
+        "APP-10",
+        "APP-21"
+      ],
+      "app_names": [
+        "Payments Gateway",
+        "Trade Capture",
+        "Customer Portal"
+      ],
+      "injected_incidents": 43
+    },
+    "P2_monday": {
+      "ci_id": "CI-0121",
+      "app_name": "Settlement Batch",
+      "injected_incidents": 26
+    },
+    "P3_disk": {
+      "ci_id": "CI-0048",
+      "app_name": "General Ledger",
+      "last_disk_pct_target": 87.6
+    },
+    "P4_mttr": {
+      "app_id": "APP-05",
+      "app_name": "Core Banking",
+      "p1_p2_resolution_multiplier": 4.5
+    }
+  },
+  "defects": {
+    "missing_priority": 80,
+    "resolved_before_opened": 25,
+    "orphan_ci": 40,
+    "app_mismatch": 50,
+    "duplicates": 60
+  }
+}
