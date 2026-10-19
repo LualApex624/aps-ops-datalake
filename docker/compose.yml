@@ -11,5 +11,19 @@ services:
     volumes:
       - datalake_data:/var/lib/postgresql/data
 
+  superset:
+    build: ../superset
+    image: aps-superset:4.1.1
+    container_name: aps-superset
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    ports:
+      - "8089:8088"
+    volumes:
+      - superset_home:/app/superset_home
+    depends_on:
+      - datalake-db
+
 volumes:
   datalake_data:
+  superset_home:
