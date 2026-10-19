@@ -1,0 +1,15 @@
+services:
+  datalake-db:
+    image: postgres:16
+    container_name: aps-datalake-db
+    environment:
+      POSTGRES_DB: datalake
+      POSTGRES_USER: ${DATALAKE_USER}
+      POSTGRES_PASSWORD: ${DATALAKE_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - datalake_data:/var/lib/postgresql/data
+
+volumes:
+  datalake_data:
