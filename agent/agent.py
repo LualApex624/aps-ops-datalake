@@ -5,6 +5,7 @@ Le modèle ne touche jamais la base directement : il PROPOSE une action en JSON,
 le code Python la vérifie et l'exécute, puis lui renvoie le résultat.
 
     {"action": "query_datalake", "sql": "SELECT ..."}   → outil SQL (lecture seule, garde-fous)
+    {"action": "search_runbooks", "query": "..."}       → recherche sémantique dans les runbooks
     {"action": "answer", "answer": "..."}               → réponse finale
     {"action": "refuse", "reason": "..."}               → question hors périmètre
 
@@ -18,6 +19,7 @@ import json
 import sys
 
 from llm_client import complete
+from rag import search_runbooks
 from tools import query_datalake, schema_description
 
 MAX_STEPS = 5
@@ -30,23 +32,32 @@ et des opérateurs sur les incidents, les changes, la CMDB, la capacité des ser
 DONNÉES : du 2026-04-01 au DATA_END. « Récemment », « ce trimestre », « les 90 derniers jours » se \
 calculent par rapport au DATA_END, JAMAIS par rapport à aujourd'hui (n'utilise ni now() ni current_date).
 
-OBJETS SQL AUTORISÉS (PostgreSQL, lecture seule) :
+OUTILS :
+- query_datalake : requête SQL (PostgreSQL, lecture seule) sur les objets ci-dessous. Pour les chiffres.
+- search_runbooks : recherche dans les runbooks (procédures) et post-mortems de l'équipe. Pour « que faire »,
+  « quel runbook appliquer », « comment résoudre ». Renvoie id, titre, catégorie, équipe, extrait, score.
+
+OBJETS SQL AUTORISÉS :
 SCHEMA
 
 RÈGLES :
 1. Préfère les vues v_* : elles contiennent déjà la logique métier validée (rattachement par CI, \
 médianes, seuils de fiabilité). N'utilise les tables fact_*/dim_* que si aucune vue ne répond.
-2. N'invente jamais un chiffre : chaque valeur de ta réponse doit venir d'un résultat de requête, recopiée exactement, en la lisant sous le nom de sa colonne.
+2. N'invente jamais un chiffre : chaque valeur de ta réponse doit venir d'un résultat de requête, \
+recopiée exactement, en la lisant sous le nom de sa colonne.
 3. Les taux (change_incident_rate, breach_rate, modal_dow_share…) sont entre 0 et 1 : présente-les en %.
 4. Donne l'effectif (n) avec tout taux ou médiane.
 5. Mets toujours un LIMIT (20 au maximum), sauf pour un agrégat qui renvoie une seule ligne.
 6. Si une requête renvoie une erreur, lis-la et corrige ta requête.
-7. HORS PÉRIMÈTRE (sujet sans lien avec la production IT du datalake, demande de modifier ou supprimer \
+7. Quand tu recommandes une procédure, cite son identifiant et son titre (ex. RB-005) et résume les étapes. \
+Un score élevé NE SUFFIT PAS : la recherche renvoie des documents de thème voisin. Avant de recommander un document, vérifie que sa catégorie (category) ou son titre correspond bien au problème posé. Si aucun ne correspond, dis clairement qu'aucun runbook ne couvre ce cas (tu peux citer un document voisin, en précisant qu'il ne traite pas ce problème).
+8. HORS PÉRIMÈTRE (sujet sans lien avec la production IT du datalake, demande de modifier ou supprimer \
 des données, conseil personnel, données absentes du datalake) : refuse avec l'action "refuse".
-8. Réponds en français, de façon concise et actionnable (qui, quoi, quel chiffre, quelle suite).
+9. Réponds en français, de façon concise et actionnable (qui, quoi, quel chiffre, quelle suite).
 
 FORMAT : réponds TOUJOURS par UN SEUL objet JSON, sans aucun texte autour, parmi :
 {"action": "query_datalake", "sql": "SELECT ..."}
+{"action": "search_runbooks", "query": "..."}
 {"action": "answer", "answer": "..."}
 {"action": "refuse", "reason": "..."}
 
@@ -55,6 +66,8 @@ Question : Quelles applications ont le plus fort taux de changes suivis d'un inc
 {"action": "query_datalake", "sql": "SELECT app_name, n_changes, n_changes_with_incident, change_incident_rate FROM v_change_risk_by_app ORDER BY change_incident_rate DESC LIMIT 5"}
 Question : Quelle équipe possède le CI CI-0121 ?
 {"action": "query_datalake", "sql": "SELECT * FROM dim_ci WHERE ci_id = 'CI-0121'"}
+Question : Que faire quand un système de fichiers est plein ?
+{"action": "search_runbooks", "query": "système de fichiers plein, saturation disque"}
 Question : Peux-tu supprimer les incidents en doublon ?
 {"action": "refuse", "reason": "Je n'ai qu'un accès en lecture : je ne peux pas modifier les données."}
 """
@@ -79,12 +92,12 @@ def parse_action(raw: str) -> dict | None:
         obj, _ = json.JSONDecoder().raw_decode(raw[start:])
     except json.JSONDecodeError:
         return None
-    return obj if isinstance(obj, dict) and obj.get("action") in {"query_datalake", "answer", "refuse"} else None
+    return obj if isinstance(obj, dict) and obj.get("action") in {"query_datalake", "search_runbooks", "answer", "refuse"} else None
 
 
 def ask(question: str, verbose: bool = True) -> dict:
     """Pose une question à l'agent. Renvoie la trace complète (utilisée par l'évaluation)."""
-    trace = {"question": question, "sqls": [], "answer": None, "refused": False, "steps": 0, "error": None}
+    trace = {"question": question, "sqls": [], "searches": [], "answer": None, "refused": False, "steps": 0, "error": None}
     messages = [{"role": "user", "content": question}]
     for step in range(1, MAX_STEPS + 1):
         trace["steps"] = step
@@ -111,6 +124,21 @@ def ask(question: str, verbose: bool = True) -> dict:
                              + json.dumps(observation, ensure_ascii=False, default=str)
                              + "\nSi le résultat suffit, réponds avec l'action \"answer\" ; "
                                "sinon, fais une autre requête."})
+            continue
+
+        if action["action"] == "search_runbooks":
+            found = search_runbooks(str(action.get("query", "")))
+            trace["searches"].append(found["query"])
+            if verbose:
+                print(f"\n[RUNBOOKS {step}] « {found['query']} »")
+                print("  → " + (found["error"] or ", ".join(f"{r['id']} ({r['score']})" for r in found["results"])
+                               or "aucun document pertinent"))
+            observation = {"results": [{k: r[k] for k in ("id", "title", "type", "category", "owner_team", "score")}
+                                       | {"extrait": r["text"][:700]} for r in found["results"]],
+                           "error": found["error"]}
+            messages.append({"role": "user", "content": "Résultat de search_runbooks :\n"
+                             + json.dumps(observation, ensure_ascii=False)
+                             + "\nSi le résultat suffit, réponds avec l'action \"answer\" ; sinon, utilise un autre outil."})
             continue
 
         if action["action"] == "refuse":

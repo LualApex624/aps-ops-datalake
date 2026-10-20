@@ -133,6 +133,40 @@ def complete(system: str, messages: list[dict], max_tokens: int = 1024,
         })
 
 
+# --- Embeddings (recherche sémantique dans les runbooks) -------------------
+# Claude n'a pas d'API d'embeddings : dans ce cas, on utilise Ollama en local.
+EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "mistral" if PROVIDER == "mistral" else "ollama")
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "mistral-embed" if EMBED_PROVIDER == "mistral" else "bge-m3")
+
+
+def embed(texts: list[str], purpose: str = "embed") -> list[list[float]]:
+    """Transforme des textes en vecteurs. Journalisé comme complete() (sans le contenu)."""
+    start = time.perf_counter()
+    status, error, tokens_in = "ok", None, None
+    try:
+        if EMBED_PROVIDER == "ollama":
+            data = _post_json(f"{OLLAMA_URL}/api/embed", {"model": EMBED_MODEL, "input": texts}, {}, timeout=300)
+            vectors, tokens_in = data["embeddings"], data.get("prompt_eval_count")
+        elif EMBED_PROVIDER == "mistral":
+            data = _post_json("https://api.mistral.ai/v1/embeddings", {"model": EMBED_MODEL, "input": texts},
+                              {"Authorization": f"Bearer {os.environ.get('MISTRAL_API_KEY', '')}"})
+            vectors = [d["embedding"] for d in data["data"]]
+            tokens_in = data.get("usage", {}).get("prompt_tokens")
+        else:
+            raise ValueError(f"EMBED_PROVIDER inconnu : {EMBED_PROVIDER}")
+        return vectors
+    except Exception as exc:
+        status, error = "error", f"{type(exc).__name__}: {exc}"[:300]
+        raise
+    finally:
+        _log({"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+              "provider": EMBED_PROVIDER, "model": EMBED_MODEL, "purpose": purpose,
+              "latency_ms": round((time.perf_counter() - start) * 1000),
+              "tokens_in": tokens_in, "tokens_out": None, "n_texts": len(texts),
+              "status": status, "error": error,
+              "prompt_sha256": _fingerprint("embed", [{"role": "user", "content": t} for t in texts])})
+
+
 if __name__ == "__main__":
     print(f"Fournisseur : {PROVIDER} · modèle : {MODEL}")
     print(complete("Réponds en un seul mot.",
