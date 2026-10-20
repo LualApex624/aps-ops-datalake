@@ -4,3 +4,4 @@ python-dateutil==2.9.0.post0
 six==1.17.0
 psycopg==3.3.6
 psycopg-binary==3.3.6
+PyYAML==6.0.3

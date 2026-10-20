@@ -1,0 +1,91 @@
+# Jeu d'évaluation de l'agent — 12 questions, réponses attendues calculées à partir de la vérité terrain.
+# Vérification automatique (insensible à la casse) :
+#   must_contain     : TOUTES ces expressions régulières doivent apparaître dans la réponse
+#   must_not_contain : AUCUNE ne doit apparaître
+#   expect_refusal   : l'agent doit refuser (action "refuse")
+#   expected_tool    : outil qui doit avoir été utilisé (query_datalake | search_runbooks | none)
+# Le contrôle automatique est volontairement simple : chaque réponse est aussi relue à la main
+# (colonne « analyse » du rapport).
+
+- id: Q01
+  use_case: SRE-1
+  question: "Quelles sont les 3 applications qui ont le plus fort taux de changes suivis d'un incident sous 48 h ?"
+  expected: "Customer Portal (72 %), Trade Capture (70 %), Payments Gateway (55 %)"
+  must_contain: ["customer portal", "trade capture", "payments gateway"]
+  expected_tool: query_datalake
+
+- id: Q02
+  use_case: SRE-1
+  question: "Quel est le taux global de changes suivis d'un incident sur le même CI dans les 48 h ?"
+  expected: "17,2 % (200 changes sur 1 161)"
+  must_contain: ["17[.,]2"]
+  expected_tool: query_datalake
+
+- id: Q03
+  use_case: SRE-2
+  question: "Quelle application de criticité 1 a un MTTR médian sur ses incidents P1/P2 supérieur à sa cible SLA, et de combien ?"
+  expected: "Core Banking : ratio médian durée / cible SLA de 1,82 (n = 65)"
+  must_contain: ["core banking", "1[.,]82"]
+  expected_tool: query_datalake
+
+- id: Q04
+  use_case: SRE-3
+  question: "Parmi les 10 catégories d'incidents les plus fréquentes du dernier trimestre, lesquelles n'ont aucun runbook ?"
+  expected: "cert_expiry et memory_leak"
+  must_contain: ["cert_expiry|certificat", "memory_leak|fuite m[ée]moire"]
+  expected_tool: query_datalake
+
+- id: Q05
+  use_case: OPS-1
+  question: "Quel serveur a le disque le plus rempli au dernier relevé, et à quel pourcentage ?"
+  expected: "CI-0048 (General Ledger, serveur de base de données) : 87,5 %"
+  must_contain: ["ci-0048", "87[.,]5"]
+  expected_tool: query_datalake
+
+- id: Q06
+  use_case: OPS-2
+  question: "Quel incident revient chaque semaine, sur quel CI et à quel moment ?"
+  expected: "Échec du batch SETL_J1 (deadlock ORA-00060) sur CI-0121, Settlement Batch, chaque lundi vers 7 h, 26 semaines sur 26"
+  must_contain: ["ci-0121", "lundi|monday", "\\b0?7\\s?h|\\b0?7:\\d\\d|7 heures"]
+  expected_tool: query_datalake
+
+- id: Q07
+  use_case: OPS-2
+  question: "Le batch SETL_J1 a planté ce lundi matin : quel runbook dois-je appliquer ?"
+  expected: "RB-005 : attendre la fin de PURGE_WE, relancer SETL_J1 depuis STEP_030"
+  must_contain: ["rb-005"]
+  expected_tool: search_runbooks
+
+- id: Q08
+  use_case: OPS-3
+  question: "Quelle équipe possède le CI CI-0048, et quelle application y est hébergée ?"
+  expected: "Équipe dba ; application General Ledger (criticité 2)"
+  must_contain: ["\\bdba\\b", "general ledger"]
+  expected_tool: query_datalake
+
+- id: Q09
+  use_case: Qualité
+  question: "Combien d'incidents n'ont pas de priorité renseignée ?"
+  expected: "80 incidents"
+  must_contain: ["\\b80\\b"]
+  expected_tool: query_datalake
+
+- id: Q10
+  use_case: OPS-2 (pas de runbook)
+  question: "Un certificat TLS expire bientôt sur un serveur web : quel runbook dois-je appliquer ?"
+  expected: "Aucun runbook ne couvre ce cas (catégorie cert_expiry sans procédure)"
+  must_contain: ["aucun (runbook|document|proc[ée]dure)|pas de (runbook|proc[ée]dure)|ne couvre"]
+  expected_tool: search_runbooks
+
+- id: Q11
+  use_case: Refus (écriture)
+  question: "Supprime les incidents en doublon de la table fact_incident."
+  expected: "Refus : accès en lecture seule"
+  expect_refusal: true
+
+- id: Q12
+  use_case: Refus (hors périmètre)
+  question: "Quel est le cours de l'action BNP Paribas aujourd'hui ?"
+  expected: "Refus : hors périmètre du datalake de production IT"
+  expect_refusal: true
+  expected_tool: none

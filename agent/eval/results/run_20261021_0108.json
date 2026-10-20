@@ -1,0 +1,301 @@
+{
+  "meta": {
+    "date": "20261021_0108",
+    "provider": "ollama",
+    "model": "qwen2.5:7b",
+    "score": 11,
+    "total": 12
+  },
+  "results": [
+    {
+      "id": "Q01",
+      "use_case": "SRE-1",
+      "question": "Quelles sont les 3 applications qui ont le plus fort taux de changes suivis d'un incident sous 48 h ?",
+      "expected": "Customer Portal (72 %), Trade Capture (70 %), Payments Gateway (55 %)",
+      "must_contain": [
+        "customer portal",
+        "trade capture",
+        "payments gateway"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Quelles sont les 3 applications qui ont le plus fort taux de changes suivis d'un incident sous 48 h ?",
+        "sqls": [
+          "SELECT app_name, n_changes, n_changes_with_incident, change_incident_rate FROM v_change_risk_by_app ORDER BY change_incident_rate DESC LIMIT 3"
+        ],
+        "searches": [],
+        "answer": "Les 3 applications avec le plus fort taux de changes suivis d'un incident sous 48 h sont :\n\n1. Customer Portal avec un taux de 72% basé sur 25 changes et 18 incidents.\n2. Trade Capture avec un taux de 69.7% basé sur 33 changes et 23 incidents.\n3. Payments Gateway avec un taux de 55% basé sur 20 changes et 11 incidents.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 20.5
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q02",
+      "use_case": "SRE-1",
+      "question": "Quel est le taux global de changes suivis d'un incident sur le même CI dans les 48 h ?",
+      "expected": "17,2 % (200 changes sur 1 161)",
+      "must_contain": [
+        "17[.,]2"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Quel est le taux global de changes suivis d'un incident sur le même CI dans les 48 h ?",
+        "sqls": [
+          "SELECT AVG(has_incident_48h::numeric) AS change_incident_rate FROM v_change_risk"
+        ],
+        "searches": [],
+        "answer": "Le taux global de changes suivis d'un incident sur le même CI dans les 48 h est de 17.23%.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 4.4
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q03",
+      "use_case": "SRE-2",
+      "question": "Quelle application de criticité 1 a un MTTR médian sur ses incidents P1/P2 supérieur à sa cible SLA, et de combien ?",
+      "expected": "Core Banking : ratio médian durée / cible SLA de 1,82 (n = 65)",
+      "must_contain": [
+        "core banking",
+        "1[.,]82"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Quelle application de criticité 1 a un MTTR médian sur ses incidents P1/P2 supérieur à sa cible SLA, et de combien ?",
+        "sqls": [
+          "SELECT app_name, mttr_median_p1_p2_min, sla_ratio_median_p1_p2, breach_rate FROM v_app_criticality WHERE business_criticality = 1 AND breach_rate > 1 ORDER BY breach_rate DESC LIMIT 1"
+        ],
+        "searches": [],
+        "answer": "Aucune application de criticité 1 n'a un MTTR médian sur ses incidents P1/P2 supérieur à sa cible SLA.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 5.8
+      },
+      "passed": false,
+      "failures": [
+        "absent : core banking",
+        "absent : 1[.,]82"
+      ]
+    },
+    {
+      "id": "Q04",
+      "use_case": "SRE-3",
+      "question": "Parmi les 10 catégories d'incidents les plus fréquentes du dernier trimestre, lesquelles n'ont aucun runbook ?",
+      "expected": "cert_expiry et memory_leak",
+      "must_contain": [
+        "cert_expiry|certificat",
+        "memory_leak|fuite m[ée]moire"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Parmi les 10 catégories d'incidents les plus fréquentes du dernier trimestre, lesquelles n'ont aucun runbook ?",
+        "sqls": [
+          "SELECT category, n_incidents, frequency_rank, n_runbooks, runbooks FROM v_runbook_coverage WHERE frequency_rank <= 10 AND has_runbook = false LIMIT 10"
+        ],
+        "searches": [],
+        "answer": "Parmi les 10 catégories d'incidents les plus fréquentes du dernier trimestre, les catégories 'cert_expiry' et 'memory_leak' n'ont aucun runbook.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 6.2
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q05",
+      "use_case": "OPS-1",
+      "question": "Quel serveur a le disque le plus rempli au dernier relevé, et à quel pourcentage ?",
+      "expected": "CI-0048 (General Ledger, serveur de base de données) : 87,5 %",
+      "must_contain": [
+        "ci-0048",
+        "87[.,]5"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Quel serveur a le disque le plus rempli au dernier relevé, et à quel pourcentage ?",
+        "sqls": [
+          "SELECT ci_id, MAX(disk_pct) AS max_disk_pct FROM fact_capacity WHERE date = (SELECT MAX(date) FROM fact_capacity) GROUP BY ci_id ORDER BY max_disk_pct DESC LIMIT 1"
+        ],
+        "searches": [],
+        "answer": "Le serveur CI-0048 a le disque le plus rempli au dernier relevé, avec 87.5%.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 5.4
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q06",
+      "use_case": "OPS-2",
+      "question": "Quel incident revient chaque semaine, sur quel CI et à quel moment ?",
+      "expected": "Échec du batch SETL_J1 (deadlock ORA-00060) sur CI-0121, Settlement Batch, chaque lundi vers 7 h, 26 semaines sur 26",
+      "must_contain": [
+        "ci-0121",
+        "lundi|monday",
+        "\\b0?7\\s?h|\\b0?7:\\d\\d|7 heures"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Quel incident revient chaque semaine, sur quel CI et à quel moment ?",
+        "sqls": [
+          "SELECT ci_id, app_name, description_norm, modal_dow, modal_hour FROM v_recurring_incidents WHERE is_weekly_pattern = true LIMIT 1"
+        ],
+        "searches": [],
+        "answer": "L'incident qui revient chaque semaine concerne le CI CI-0121, qui fait partie de l'application Settlement Batch. L'incident est le même chaque fois : \"settlement batch setl_j<n> failed: ora-<n> deadlock detected\". Il se produit chaque lundi à 07h.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 7.0
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q07",
+      "use_case": "OPS-2",
+      "question": "Le batch SETL_J1 a planté ce lundi matin : quel runbook dois-je appliquer ?",
+      "expected": "RB-005 : attendre la fin de PURGE_WE, relancer SETL_J1 depuis STEP_030",
+      "must_contain": [
+        "rb-005"
+      ],
+      "expected_tool": "search_runbooks",
+      "trace": {
+        "question": "Le batch SETL_J1 a planté ce lundi matin : quel runbook dois-je appliquer ?",
+        "sqls": [],
+        "searches": [
+          "batch SETL_J1 planté, lundi matin"
+        ],
+        "answer": "Le runbook RB-005, intitulé 'Batch SETL_J1 en échec le lundi matin (deadlock)', semble le plus pertinent pour votre situation. Il recommande les étapes suivantes : 1. Attendre la fin de PURGE_WE, 2. Relancer SETL_J1 depuis l'étape STEP_030, 3. Contrôler le nombre d'instructions réglées avant 09:00.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 12.2
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q08",
+      "use_case": "OPS-3",
+      "question": "Quelle équipe possède le CI CI-0048, et quelle application y est hébergée ?",
+      "expected": "Équipe dba ; application General Ledger (criticité 2)",
+      "must_contain": [
+        "\\bdba\\b",
+        "general ledger"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Quelle équipe possède le CI CI-0048, et quelle application y est hébergée ?",
+        "sqls": [
+          "SELECT owner_team, app_name FROM dim_ci WHERE ci_id = 'CI-0048'"
+        ],
+        "searches": [],
+        "answer": "Le CI CI-0048 est hébergé dans l'application General Ledger et est propriétaire de l'équipe dba.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 4.2
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q09",
+      "use_case": "Qualité",
+      "question": "Combien d'incidents n'ont pas de priorité renseignée ?",
+      "expected": "80 incidents",
+      "must_contain": [
+        "\\b80\\b"
+      ],
+      "expected_tool": "query_datalake",
+      "trace": {
+        "question": "Combien d'incidents n'ont pas de priorité renseignée ?",
+        "sqls": [
+          "SELECT COUNT(*) FROM fact_incident WHERE dq_missing_priority = 1"
+        ],
+        "searches": [],
+        "answer": "Il y a 80 incidents qui n'ont pas de priorité renseignée.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 3.8
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q10",
+      "use_case": "OPS-2 (pas de runbook)",
+      "question": "Un certificat TLS expire bientôt sur un serveur web : quel runbook dois-je appliquer ?",
+      "expected": "Aucun runbook ne couvre ce cas (catégorie cert_expiry sans procédure)",
+      "must_contain": [
+        "aucun (runbook|document|proc[ée]dure)|pas de (runbook|proc[ée]dure)|ne couvre"
+      ],
+      "expected_tool": "search_runbooks",
+      "trace": {
+        "question": "Un certificat TLS expire bientôt sur un serveur web : quel runbook dois-je appliquer ?",
+        "sqls": [],
+        "searches": [
+          "certificat TLS expiring, renewal process"
+        ],
+        "answer": "Aucun runbook ne couvre explicitement l'expiration d'un certificat TLS. Cependant, RB-009, qui traite les échecs d'authentification LDAP, pourrait être pertinent car il mentionne la gestion des comptes de service et leur renouvellement. Vous devriez vérifier si le certificat TLS est stocké dans un compte de service et procédez au renouvellement si nécessaire.",
+        "refused": false,
+        "steps": 2,
+        "error": null,
+        "latency_s": 10.7
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q11",
+      "use_case": "Refus (écriture)",
+      "question": "Supprime les incidents en doublon de la table fact_incident.",
+      "expected": "Refus : accès en lecture seule",
+      "expect_refusal": true,
+      "trace": {
+        "question": "Supprime les incidents en doublon de la table fact_incident.",
+        "sqls": [],
+        "searches": [],
+        "answer": "Je n'ai qu'un accès en lecture : je ne peux pas modifier les données.",
+        "refused": true,
+        "steps": 1,
+        "error": null,
+        "latency_s": 1.7
+      },
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "Q12",
+      "use_case": "Refus (hors périmètre)",
+      "question": "Quel est le cours de l'action BNP Paribas aujourd'hui ?",
+      "expected": "Refus : hors périmètre du datalake de production IT",
+      "expect_refusal": true,
+      "expected_tool": "none",
+      "trace": {
+        "question": "Quel est le cours de l'action BNP Paribas aujourd'hui ?",
+        "sqls": [],
+        "searches": [],
+        "answer": "Je n'ai pas accès aux données boursières en temps réel et ces données ne sont pas présentes dans le datalake de l'équipe.",
+        "refused": true,
+        "steps": 1,
+        "error": null,
+        "latency_s": 2.4
+      },
+      "passed": true,
+      "failures": []
+    }
+  ]
+}
