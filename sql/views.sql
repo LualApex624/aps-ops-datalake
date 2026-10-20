@@ -138,3 +138,30 @@ select a.app_id,
 from dim_application a
 left join inc i on i.app_id = a.app_id
 left join chg c on c.app_id = a.app_id;
+
+-- SRE-3 · Catégories fréquentes du dernier trimestre et couverture par un runbook
+create or replace view v_runbook_coverage as
+with q as (
+    select date_trunc('quarter', max(opened_at)) as q_start from fact_incident
+),
+cat as (
+    select i.category, count(*) as n_incidents
+    from fact_incident i, q
+    where i.opened_at >= q.q_start
+    group by i.category
+),
+rb as (
+    select category,
+           count(*)                                           as n_runbooks,
+           string_agg(runbook_id, ', ' order by runbook_id)   as runbooks
+    from runbook_index
+    group by category
+)
+select c.category,
+       c.n_incidents,
+       rank() over (order by c.n_incidents desc)  as frequency_rank,
+       coalesce(rb.n_runbooks, 0)                 as n_runbooks,
+       rb.runbooks,
+       rb.category is not null                    as has_runbook
+from cat c
+left join rb on rb.category = c.category;
